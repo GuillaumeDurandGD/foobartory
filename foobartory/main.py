@@ -165,7 +165,7 @@ async def logger() -> None:
         await asyncio.sleep(2)
 
 
-if __name__ == "__main__":
+def main():
     loop = asyncio.get_event_loop()
     try:
         loop.create_task(manager(loop))
