@@ -1,6 +1,6 @@
 # Foobartory
 
-## Enoncé
+## Resume (in french)
 
 Le but est de coder une chaîne de production automatique de `foobar`.
 
@@ -25,3 +25,47 @@ _Notes_:
 
 ## Install and run
 
+### With Poetry
+
+Have Poetry installed, python 3.9 and clone the project
+
+Install the project (creation of en .venv)
+
+```
+poetry install
+```
+
+Run the application
+
+```
+poetry run foobartory 
+```
+
+### Without Poetry
+
+No need to install a venv as the program only use standard packages
+
+Run the application
+```
+python foobartory 
+```
+
+
+## How does it work?
+
+In this project, I used asyncio to simulate robots that work separately.
+
+A robot is a class instance inherited by Robot: different classes for different action.
+When a robot starts to `work()`, it creates an async task which loop forever de to its action. 
+
+At the start of the application, three tasks are launched:
+- logger : logger frequently the stock and assignment status
+- manager : here to check if there are newly created robots and assign them to a role.
+  Stop the program when 30 robots have been created
+- init_step : the goal of this task is to move robot on different roles as long as there is less than 5 robots available 
+
+## Notes
+
+A change of role is done by the deletion of a robot and the creation of another one with the desired role.
+
+It's possible to see the production of foo and bar with logging in DEBUG mode.

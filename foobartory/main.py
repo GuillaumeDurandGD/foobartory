@@ -1,3 +1,9 @@
+"""Foobartory
+
+Foobar production line.
+Starting with 2 robots, the goal is to buy new robots to increase the production speed.
+"""
+
 import asyncio
 import logging
 
@@ -11,6 +17,8 @@ from foobartory.robot import (
 )
 
 logging.basicConfig(level=logging.INFO)
+
+LOGGER = logging.getLogger(__name__)
 
 stock = {"foo": 0, "bar": 0, "foobar": 0, "euros": 0, "robots": 2}
 
@@ -32,6 +40,7 @@ mapping_name_task = {
 }
 
 MINIMUM_NBR_OF_ROBOTS_TO_FILL_ALL_ROLES = 5
+DELAY_BETWEEN_TWO_ROLES_CHANGE = 5
 
 
 def take_the_best_robot_to_move_to() -> Robot:
@@ -66,12 +75,12 @@ async def change_robot_role_by(
     else:
         robot = take_the_best_robot_to_move_to()
 
-    logging.info(
+    LOGGER.info(
         f"Change robot with {from_role or robot.name} role to have {wanted_role}"
     )
     robot.cancel()
 
-    await asyncio.sleep(5)
+    await asyncio.sleep(DELAY_BETWEEN_TWO_ROLES_CHANGE)
 
     robot_for_new_role = mapping_name_task[wanted_role](loop_, stock, tasks_assignment)
     robot_for_new_role.work()
@@ -86,28 +95,42 @@ async def init_step(loop_: asyncio.AbstractEventLoop) -> None:
     Args:
         loop_: asyncio event loop
     """
+    LOGGER.info("Start init step")
+    # If it's too low, it will cause to much move and cancellation of action
+    # If too high, we can let some robot without resources to work on
+
+    delay_between_control = 20
+
     FooMiner(loop_, stock, tasks_assignment).work()
     BarMiner(loop_, stock, tasks_assignment).work()
 
     while stock["robots"] < MINIMUM_NBR_OF_ROBOTS_TO_FILL_ALL_ROLES:
         if stock["euros"] >= 3 and stock["foo"] >= 6 and not tasks_assignment["buyer"]:
+            # 3 euros and 6 foo are minimum requirement to buy a robot
             await change_robot_role_by(loop_, "buyer")
         elif stock["foobar"] >= 5 and not tasks_assignment["seller"]:
+            # a seller can sell up to 5 foobar in the same time, so we wait to have a minimum of 5 foobar
+            # to optimize a little the movements of the robot
             await change_robot_role_by(loop_, "seller")
         elif (
             stock["foo"] > 10
             and stock["bar"] > 10
             and not tasks_assignment["assembler"]
         ):
+            # there is 60% chances to get successfully build a foobar with a foo and a bar.
+            # With 10 fo and bar there is good chance to have 5 foobar without move again to the foo role.
             await change_robot_role_by(loop_, "assembler")
         elif (
             (stock["euros"] < 3 or stock["foo"] < 6)
             and tasks_assignment["buyer"]
             and not tasks_assignment["bar"]
         ):
+            # when it's not possible to buy more robots and no more bar are actually mined.
             await change_robot_role_by(loop_, "bar")
 
-        await asyncio.sleep(15)
+        await asyncio.sleep(delay_between_control)
+
+    LOGGER.info("End of init step")
 
 
 def get_role_with_less_nbr_of_attributed_robots() -> str:
@@ -143,12 +166,12 @@ async def manager(loop_: asyncio.AbstractEventLoop) -> None:
     """
     while True:
         if len(tasks_assignment["available"]):
-            logging.info("Robot(s) is/are available")
+            LOGGER.info("Robot(s) is/are available")
             role_to_take = get_role_with_less_nbr_of_attributed_robots()
             await change_robot_role_by(loop_, role_to_take, from_role="available")
 
         if stock["robots"] >= 30:
-            logging.info("We reached 30 robots, we can stop the production")
+            LOGGER.info("We reached 30 robots, we can stop the production")
             loop_.stop()
 
         await asyncio.sleep(1)
@@ -158,9 +181,10 @@ async def logger() -> None:
     """Log stock and assignment informations to follow the behaviour"""
 
     while True:
-        logging.info(f"Stock information : {stock}")
-        logging.info(
-            f"Assignment information : {({key: len(ls) for key, ls in tasks_assignment.items()})}"
+        LOGGER.info("####################")
+        LOGGER.info(f"Stock information : {stock}")
+        LOGGER.info(
+            f"Assignment information (nb robots / role): {({key: len(ls) for key, ls in tasks_assignment.items()})}"
         )
         await asyncio.sleep(2)
 

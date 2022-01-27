@@ -1,7 +1,21 @@
+"""Robot related classes.
+
+One class per role. Each role do a specific each
+
+  Typical usage example:
+
+  robot = RobotWithRole()
+  robot.work()
+  robot.cancel()
+"""
+
 import asyncio
+import logging
 import random
 from typing import Dict
 from abc import ABCMeta, abstractmethod
+
+LOGGER = logging.getLogger(__name__)
 
 
 def is_successful_assembly() -> bool:
@@ -14,17 +28,19 @@ def is_successful_assembly() -> bool:
 
 
 class Robot(metaclass=ABCMeta):
+    no_action_sleeping_time = 1
+
     def __init__(
         self,
         loop: asyncio.AbstractEventLoop,
         stock_ref: Dict,
         task_assignment_ref: Dict,
     ):
-        self.stock_ref = stock_ref
-        self.task_assignment_ref = task_assignment_ref
         self.loop = loop
         self.name = None
+        self.stock_ref = stock_ref
         self.task = None
+        self.task_assignment_ref = task_assignment_ref
 
     def work(self) -> None:
         self.task = self.loop.create_task(self.action())
@@ -48,11 +64,15 @@ class FooMiner(Robot):
         super().__init__(loop, stock_ref, task_assignment_ref)
         self.name = "foo"
 
+    @property
+    def action_duration(self):
+        return 1
+
     async def action(self) -> None:
         while True:
-            await asyncio.sleep(1)
+            await asyncio.sleep(self.action_duration)
             self.stock_ref["foo"] += 1
-            print("foo")
+            LOGGER.debug("foo")
 
 
 class BarMiner(Robot):
@@ -65,11 +85,15 @@ class BarMiner(Robot):
         super().__init__(loop, stock_ref, task_assignment_ref)
         self.name = "bar"
 
+    @property
+    def action_duration(self):
+        return round(random.uniform(0.5, 2.0), 1)
+
     async def action(self) -> None:
         while True:
-            await asyncio.sleep(1)
+            await asyncio.sleep(self.action_duration)
             self.stock_ref["bar"] += 1
-            print("bar")
+            LOGGER.debug("bar")
 
 
 class FooBarAssembler(Robot):
@@ -82,21 +106,26 @@ class FooBarAssembler(Robot):
         super().__init__(loop, stock_ref, task_assignment_ref)
         self.name = "assembler"
 
+    @property
+    def action_duration(self):
+        return 2
+
     async def action(self):
         while True:
-            if self.stock_ref["foo"] > 0 and self.stock_ref["bar"] > 0:
-                self.stock_ref["foo"] -= 1
-                self.stock_ref["bar"] -= 1
+            if self.stock_ref["foo"] == 0 or self.stock_ref["bar"] == 0:
+                await asyncio.sleep(self.no_action_sleeping_time)
+                continue
 
-                await asyncio.sleep(2)
+            self.stock_ref["foo"] -= 1
+            self.stock_ref["bar"] -= 1
 
-                if is_successful_assembly():
-                    self.stock_ref["foobar"] += 1
-                else:
-                    self.stock_ref["foo"] -= 1
-                    self.stock_ref["bar"] += 1
+            await asyncio.sleep(self.action_duration)
+
+            if is_successful_assembly():
+                self.stock_ref["foobar"] += 1
             else:
-                await asyncio.sleep(1)
+                self.stock_ref["foo"] -= 1
+                self.stock_ref["bar"] += 1
 
 
 class FooBarSeller(Robot):
@@ -109,10 +138,14 @@ class FooBarSeller(Robot):
         super().__init__(loop, stock_ref, task_assignment_ref)
         self.name = "seller"
 
+    @property
+    def action_duration(self):
+        return 10
+
     async def action(self):
         while True:
             if self.stock_ref["foobar"] == 0:
-                await asyncio.sleep(1)
+                await asyncio.sleep(self.no_action_sleeping_time)
                 continue
 
             nb_foobar_to_sell = 0
@@ -124,7 +157,7 @@ class FooBarSeller(Robot):
                 nb_foobar_to_sell = 5
                 self.stock_ref["foobar"] -= 5
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(self.action_duration)
 
             self.stock_ref["euros"] += nb_foobar_to_sell
 
@@ -142,7 +175,7 @@ class RobotBuyer(Robot):
     async def action(self):
         while True:
             if self.stock_ref["euros"] < 3 or self.stock_ref["foo"] < 6:
-                await asyncio.sleep(1)
+                await asyncio.sleep(self.no_action_sleeping_time)
                 continue
 
             self.stock_ref["foo"] -= 6
@@ -162,7 +195,11 @@ class AvailableRobot(Robot):
         super().__init__(loop, stock_ref, task_assignment_ref)
         self.name = "available"
 
+    @property
+    def action_duration(self):
+        return 5
+
     async def action(self):
         while True:
             print("I'm waiting for a role")
-            await asyncio.sleep(5)
+            await asyncio.sleep(self.action_duration)
